@@ -1,0 +1,33 @@
+{
+  "name": "prcheckerbot",
+  "version": "1.0.0",
+  "description": "GitHub App for PR validation checks",
+  "author": "Alex Remniov <alexander@remniov.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alexremn/github-prchecker.git"
+  },
+  "bugs": {
+    "url": "https://github.com/alexremn/github-prchecker/issues"
+  },
+  "homepage": "https://github.com/alexremn/github-prchecker#readme",
+  "main": "src/app.js",
+  "scripts": {
+    "start": "node ./src/server.js",
+    "start:probot": "probot run ./src/app.js",
+    "dev": "nodemon --exec 'node ./src/server.js'",
+    "test": "jest --passWithNoTests"
+  },
+  "dependencies": {
+    "probot": "^14.2.4"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "nodemon": "^3.1.0",
+    "smee-client": "^2.0.0"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

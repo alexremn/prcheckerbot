@@ -1,0 +1,6 @@
+node_modules/
+.env
+*.pem
+private-key.pem
+.DS_Store
+npm-debug.log

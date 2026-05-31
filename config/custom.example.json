@@ -1,0 +1,26 @@
+{
+  "checkRun": {
+    "name": "PR Checker"
+  },
+  "checks": {
+    "minApprovals": {
+      "enabled": true,
+      "required": 2
+    },
+    "blockedLabels": {
+      "labels": ["do not merge", "wip", "blocked"]
+    },
+    "requiredLabels": {
+      "groups": [
+        {
+          "anyOf": ["review passed", "code review passed"],
+          "message": "❌ Missing code review approval label"
+        },
+        {
+          "anyOf": ["qa passed", "qa skipped"],
+          "message": "❌ Missing QA status label"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,113 @@
+{
+  "checkRun": {
+    "name": "PR Checker"
+  },
+  "api": {
+    "listPerPage": 100
+  },
+  "checks": {
+    "labelsRequired": {
+      "enabled": true,
+      "minCount": 1,
+      "message": "❌ Please add labels to this PR"
+    },
+    "blockedLabels": {
+      "enabled": true,
+      "labels": ["do not merge", "work in progress", "wip"],
+      "messages": {
+        "do not merge": "❌ PR is marked as Do Not Merge",
+        "work in progress": "❌ PR is marked as Work in Progress",
+        "wip": "❌ PR is marked as Work in Progress"
+      },
+      "fallbackMessage": "❌ PR has blocked label: {label}"
+    },
+    "titlePatternBlock": {
+      "enabled": true,
+      "pattern": "\\b(wip|work.in.progress|draft)\\b",
+      "flags": "i",
+      "message": "❌ PR title contains WIP/Draft indicator"
+    },
+    "descriptionRequired": {
+      "enabled": true,
+      "minLength": 5,
+      "message": "❌ Please provide a meaningful summary in the Pull Request description"
+    },
+    "blockedReviewLabels": {
+      "enabled": true,
+      "labels": ["product review needed"],
+      "messages": {
+        "product review needed": "❌ Has not passed product review"
+      },
+      "fallbackMessage": "❌ PR has blocking review label: {label}"
+    },
+    "requiredLabels": {
+      "enabled": true,
+      "groups": [
+        {
+          "anyOf": ["review passed", "code review passed"],
+          "message": "❌ Has not passed code review (needs 'review passed' or 'code review passed' label)"
+        },
+        {
+          "anyOf": ["qa passed"],
+          "message": "❌ Has not passed QA (needs 'QA passed' label)"
+        }
+      ]
+    },
+    "minApprovals": {
+      "enabled": false,
+      "required": 1,
+      "message": "❌ At least {required} approval review(s) required (currently: {current})"
+    },
+    "baseBranchAllowed": {
+      "enabled": true,
+      "allowed": ["master", "main"],
+      "message": "❌ PR base branch is not allowed (currently: {baseRef}). Allowed: {allowed}"
+    },
+    "bigPrWarning": {
+      "enabled": true,
+      "maxChanges": 500,
+      "message": "⚠️ Big PR: {additions} additions + {deletions} deletions = {totalChanges} total changes"
+    },
+    "wipCommitMessages": {
+      "enabled": true,
+      "pattern": "\\b(wip|work.in.progress)\\b",
+      "flags": "i",
+      "message": "❌ PR is a Work in Progress (commit message contains 'WIP')"
+    },
+    "mergeCommits": {
+      "enabled": true,
+      "pattern": "^merge (branch|pull request)",
+      "flags": "i",
+      "message": "❌ Please rebase to remove merge commits in this PR"
+    },
+    "fixupCommits": {
+      "enabled": true,
+      "pattern": "^(fixup|squash)!",
+      "flags": "i",
+      "message": "❌ Contains fixup or squash commits - please squash them before merging"
+    },
+    "meaningfulCommitMessages": {
+      "enabled": true,
+      "minSubjectLength": 11,
+      "disallowedExactSubjects": ["fix", "update", "change", "add", "remove", "wip"],
+      "disallowedPrefixes": ["temp", "temporary", "test", "testing"],
+      "message": "❌ Contains commits with non-meaningful messages (too short, generic, or temporary)"
+    },
+    "branchUpToDate": {
+      "enabled": true,
+      "maxCommitsBehind": 5,
+      "message": "❌ Branch is {commitsBehind} commits behind {baseRef} (max allowed: {max}). Please rebase."
+    },
+    "sensitiveFiles": {
+      "enabled": true,
+      "blockedExtensions": [".env", ".key", ".pem", ".p12", ".pfx"],
+      "message": "❌ PR contains potentially sensitive file: {filename}"
+    },
+    "sensitiveInfoInBody": {
+      "enabled": true,
+      "pattern": "(password|secret|token|api_key|apikey|private_key)\\s*[:=]\\s*['\"]?[a-zA-Z0-9+/=]{10,}",
+      "flags": "i",
+      "message": "❌ PR description may contain sensitive information (passwords, secrets, tokens)"
+    }
+  }
+}
