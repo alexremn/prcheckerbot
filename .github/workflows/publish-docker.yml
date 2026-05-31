@@ -1,38 +1,27 @@
 name: dockerhub-from-release
 
 on:
-  release:
-    types:
-      - published
-      - released
-      - prereleased
   workflow_run:
     workflows:
-      - release
+      - Release
     types:
       - completed
 
 permissions:
   contents: read
 
+concurrency:
+  group: docker-publish-${{ github.event.workflow_run.head_sha }}
+  cancel-in-progress: false
+
 jobs:
   publish:
-    if: |
-      github.event_name == 'release' ||
-      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+    if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     env:
       IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/prcheckerbot
     steps:
-      - name: Checkout (release event)
-        if: github.event_name == 'release'
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-          ref: ${{ github.event.release.tag_name }}
-
-      - name: Checkout (workflow run event)
-        if: github.event_name == 'workflow_run'
+      - name: Checkout
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
@@ -41,15 +30,8 @@ jobs:
       - name: Resolve release tag
         id: tag
         shell: bash
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
-          if [ "$EVENT_NAME" = "release" ]; then
-            tag="$RELEASE_TAG"
-          else
-            tag="$(git tag --points-at HEAD | sort -V | tail -n1)"
-          fi
+          tag="$(git tag --points-at HEAD | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+' | sort -V | tail -n1)"
 
           if [ -z "$tag" ]; then
             echo "No release tag resolved for this event; skipping Docker publish."

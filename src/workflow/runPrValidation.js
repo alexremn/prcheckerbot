@@ -2,7 +2,12 @@ const { evaluatePullRequest } = require("../engine/evaluatePullRequest");
 const { publishCheckRun, publishErrorCheckRun } = require("../github/publishCheckRun");
 
 async function runPrValidation(context, pr, config) {
-  context.log.info(`Processing PR #${pr.number}: ${pr.title}`);
+  const repo = context.payload.repository?.full_name;
+  const action = context.payload.action;
+  context.log.info(
+    { repo, pr: pr.number, action, url: pr.html_url },
+    `PR #${pr.number} ${action ? `(${action}) ` : ""}${repo ? `[${repo}] ` : ""}${pr.title}`,
+  );
 
   let results;
   try {

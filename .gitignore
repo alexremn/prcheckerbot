@@ -4,3 +4,6 @@ node_modules/
 private-key.pem
 .DS_Store
 npm-debug.log
+.rtk
+RTK.md
+CLAUDE.md

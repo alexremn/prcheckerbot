@@ -8,10 +8,10 @@ const { loadConfig } = require("./config");
 const { registerHealthEndpoints } = require("./runtime/registerHealthEndpoints");
 const { registerWebhookHandlers } = require("./runtime/registerWebhookHandlers");
 
-module.exports = (app, { getRouter } = {}) => {
+module.exports = (app, { addHandler } = {}) => {
   app.log.info("PR Checker Bot loaded");
 
   const config = loadConfig(app.log);
-  registerHealthEndpoints(getRouter, app.log);
+  registerHealthEndpoints(addHandler, app.log);
   registerWebhookHandlers(app, config);
 };
