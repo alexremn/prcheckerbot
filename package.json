@@ -24,7 +24,7 @@
     "probot": "^14.2.4"
   },
   "devDependencies": {
-    "jest": "^29.7.0",
+    "jest": "^30.4.2",
     "nodemon": "^3.1.0",
     "smee-client": "^5.0.0"
   },
