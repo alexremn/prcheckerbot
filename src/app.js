@@ -1,5 +1,5 @@
 /**
- * Hubstaff PR Bot - GitHub App for PR validation
+ * PR Checker Bot - GitHub App for PR validation
  * Replacement for Peril-based Danger checks
  *
  * @param {import('probot').Probot} app
