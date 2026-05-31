@@ -20,6 +20,7 @@
     "test": "jest --passWithNoTests"
   },
   "dependencies": {
+    "@octokit/rest": "^22.0.1",
     "probot": "^14.2.4"
   },
   "devDependencies": {

@@ -6,6 +6,13 @@
 
 A [Probot](https://probot.github.io/) GitHub App that validates Pull Requests using configurable checks.
 
+Runs in two modes:
+
+1. **App mode** — long-running webhook server (Probot). Install once as a GitHub App, validates every PR in every subscribed repo.
+2. **Action mode** — drop-in GitHub Action triggered inside a repo's workflow. No deployment, uses the workflow's `GITHUB_TOKEN`.
+
+Both modes share the same rule engine and the same config schema.
+
 ## Features
 
 - Config-driven validation rules (all checks can be enabled/disabled)
@@ -152,6 +159,66 @@ Optional:
 npm install
 npm run dev
 ```
+
+## Action Mode
+
+Use directly inside a repository workflow. No GitHub App, no deployment.
+
+```yaml
+# .github/workflows/pr-checker.yml
+name: PR Checker
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
+  pull_request_review:
+    types: [submitted, dismissed]
+
+permissions:
+  contents: read
+  pull-requests: read
+  checks: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: alexremn/github-prchecker@v1
+        with:
+          # All inputs are optional.
+          config-path: .github/pr-checker.json
+          check-run-name: PR Checker
+          fail-on-failure: "true"
+```
+
+### Inputs
+
+| Input              | Default            | Notes                                                              |
+| ------------------ | ------------------ | ------------------------------------------------------------------ |
+| `github-token`     | `${{ github.token }}` | Needs `pull-requests: read` + `checks: write`.                  |
+| `config-path`      | _(empty)_          | Path to a custom rules JSON file relative to the workspace.        |
+| `check-run-name`   | `PR Checker`       | Name shown on the PR.                                              |
+| `fail-on-failure`  | `true`             | Exit non-zero when a rule fails (also fails the job).              |
+
+### Outputs
+
+| Output           | Description                       |
+| ---------------- | --------------------------------- |
+| `passed`         | `true` when no rules failed.      |
+| `failure-count`  | Number of failing rules.          |
+| `warning-count`  | Number of warnings emitted.       |
+
+A Markdown step summary is also written to `$GITHUB_STEP_SUMMARY`.
+
+The action pulls the prebuilt image
+[`alexremn/prcheckerbot:latest`](https://hub.docker.com/r/alexremn/prcheckerbot)
+from Docker Hub — no per-run image build.
+
+> **Forks:** `pull_request` events from forks ship a read-only `GITHUB_TOKEN`, so
+> the check run cannot be created. Use `pull_request_target` if you need to
+> validate fork PRs — review the [security implications][prt-sec] first.
+
+[prt-sec]: https://securitylab.github.com/research/github-actions-preventing-pwn-requests/
 
 ## Docker
 

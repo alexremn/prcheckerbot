@@ -1,0 +1,44 @@
+name: "PR Checker Bot"
+description: "Validate pull requests against configurable rules (labels, commits, branch freshness, secrets, reviews)."
+author: "Alex Remniov"
+branding:
+  icon: "check-circle"
+  color: "green"
+
+inputs:
+  github-token:
+    description: "Token used to read the PR and publish the check run. Needs `pull-requests: read` and `checks: write`."
+    required: false
+    default: ${{ github.token }}
+  config-path:
+    description: "Path to a custom rules config JSON file (relative to the workspace). Merged on top of the built-in defaults."
+    required: false
+    default: ""
+  check-run-name:
+    description: "Override the GitHub Check Run name."
+    required: false
+    default: ""
+  fail-on-failure:
+    description: "Exit the action with a non-zero status when one or more rules fail."
+    required: false
+    default: "true"
+
+outputs:
+  passed:
+    description: "true when no rules failed."
+  failure-count:
+    description: "Number of failing rules."
+  warning-count:
+    description: "Number of warnings."
+
+runs:
+  using: "docker"
+  image: "docker://alexremn/prcheckerbot:latest"
+  entrypoint: "node"
+  args:
+    - "/app/src/action.js"
+  env:
+    INPUT_GITHUB_TOKEN: ${{ inputs.github-token }}
+    INPUT_CONFIG_PATH: ${{ inputs.config-path }}
+    INPUT_CHECK_RUN_NAME: ${{ inputs.check-run-name }}
+    INPUT_FAIL_ON_FAILURE: ${{ inputs.fail-on-failure }}
