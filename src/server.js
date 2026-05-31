@@ -7,25 +7,67 @@ const app = require("./app");
 process.env.HOST = process.env.HOST || "0.0.0.0";
 
 // Kubernetes liveness/readiness probes hit these paths every few seconds.
-// Their access logs are pure noise, so we drop them at the log destination.
+// Their access logs are pure noise, so we drop them entirely.
 const SILENCED_ACCESS_PATHS = new Set(["/healthz", "/readyz"]);
 
-// pino emits one NDJSON record per write(); drop probe access logs, pass the
-// rest straight through to stdout untouched.
+// Real client IP, preferring the proxy/ingress forwarded headers.
+function clientIp(headers, remoteAddress) {
+  const forwardedFor = headers["x-forwarded-for"];
+  if (typeof forwardedFor === "string" && forwardedFor.length > 0) {
+    return forwardedFor.split(",")[0].trim();
+  }
+  return headers["x-real-ip"] || remoteAddress;
+}
+
+// Transform one parsed pino record into the NDJSON line we emit.
+// Returns a string to write, or null to drop the record.
+function formatRecord(record) {
+  const req = record.req;
+
+  // App-level log (no HTTP request attached). The JSON round-trip in the
+  // destination already collapsed pino's duplicated chindings — e.g.
+  // {name:probot, name:probot, name:event} parses to {name:event} — so we
+  // just re-serialize the de-duplicated record.
+  if (!req || typeof req.url !== "string") {
+    return JSON.stringify(record);
+  }
+
+  const path = req.url.split("?")[0];
+  if (SILENCED_ACCESS_PATHS.has(path)) {
+    return null; // k8s probe noise
+  }
+
+  // HTTP access log: keep the useful fields, drop the verbose header dump.
+  return JSON.stringify({
+    level: record.level,
+    time: record.time,
+    pid: record.pid,
+    hostname: record.hostname,
+    name: record.name,
+    reqId: req.id,
+    method: req.method,
+    url: req.url,
+    status: record.res ? record.res.statusCode : undefined,
+    responseTime: record.responseTime,
+    ip: clientIp(req.headers || {}, req.remoteAddress),
+    msg: record.msg,
+  });
+}
+
+// pino emits NDJSON; we reshape each record (de-dupe keys, trim access logs,
+// drop probe noise) before forwarding to stdout.
 const destination = new Writable({
   write(chunk, _encoding, callback) {
-    let drop = false;
-    try {
-      const record = JSON.parse(chunk.toString());
-      const url =
-        record.req && typeof record.req.url === "string"
-          ? record.req.url.split("?")[0]
-          : null;
-      drop = url !== null && SILENCED_ACCESS_PATHS.has(url);
-    } catch {
-      // Not JSON (shouldn't happen) — never drop.
+    for (const line of chunk.toString().split("\n")) {
+      if (!line) continue;
+      let out;
+      try {
+        out = formatRecord(JSON.parse(line));
+      } catch {
+        out = line; // not JSON — forward verbatim
+      }
+      if (out != null) process.stdout.write(out + "\n");
     }
-    if (!drop) process.stdout.write(chunk);
     callback();
   },
 });
