@@ -1,5 +1,4 @@
 {{- $cmp := "prcheckerbot" -}}
-{{ include "chart.configmap" (dict "Values" .Values "Release" .Release "Chart" .Chart "cmp" $cmp) }}
 {{ include "chart.extsecret" (dict "Values" .Values "Release" .Release "Chart" .Chart "cmp" $cmp) }}
 {{ include "chart.secret" (dict "Values" .Values "Release" .Release "Chart" .Chart "cmp" $cmp) }}
 {{ include "chart.serviceAccount" (dict "Values" .Values "Release" .Release "Chart" .Chart "cmp" $cmp) }}
