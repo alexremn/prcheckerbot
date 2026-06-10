@@ -101,6 +101,12 @@
     "sensitiveFiles": {
       "enabled": true,
       "blockedExtensions": [".env", ".key", ".pem", ".p12", ".pfx"],
+      "blockedPatterns": [
+        "(^|/)id_(rsa|dsa|ecdsa|ed25519)$",
+        "(^|/)\\.(npmrc|netrc)$",
+        "(^|/)credentials(\\.json)?$",
+        "(^|/)\\.env(?!\\.example$)(\\..+)?$"
+      ],
       "message": "❌ PR contains potentially sensitive file: {filename}"
     },
     "sensitiveInfoInBody": {

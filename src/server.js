@@ -54,20 +54,34 @@ function formatRecord(record) {
   });
 }
 
+function emitLine(line) {
+  let out;
+  try {
+    out = formatRecord(JSON.parse(line));
+  } catch {
+    out = line; // not JSON — forward verbatim
+  }
+  if (out != null) process.stdout.write(out + "\n");
+}
+
 // pino emits NDJSON; we reshape each record (de-dupe keys, trim access logs,
-// drop probe noise) before forwarding to stdout.
+// drop probe noise) before forwarding to stdout. A record may be split across
+// chunks, so the trailing partial line is buffered until its newline arrives —
+// otherwise both halves would fail JSON.parse and leak through verbatim.
+let pendingLine = "";
 const destination = new Writable({
   write(chunk, _encoding, callback) {
-    for (const line of chunk.toString().split("\n")) {
+    const lines = (pendingLine + chunk.toString()).split("\n");
+    pendingLine = lines.pop();
+    for (const line of lines) {
       if (!line) continue;
-      let out;
-      try {
-        out = formatRecord(JSON.parse(line));
-      } catch {
-        out = line; // not JSON — forward verbatim
-      }
-      if (out != null) process.stdout.write(out + "\n");
+      emitLine(line);
     }
+    callback();
+  },
+  final(callback) {
+    if (pendingLine) emitLine(pendingLine);
+    pendingLine = "";
     callback();
   },
 });

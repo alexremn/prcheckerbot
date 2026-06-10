@@ -50,6 +50,10 @@ function getCommitSubject(message) {
   return message.split("\n")[0].trim();
 }
 
+// COMMENTED / PENDING reviews do not change a reviewer's standing approval
+// on GitHub, so they must not overwrite an earlier APPROVED state here.
+const APPROVAL_AFFECTING_STATES = new Set(["APPROVED", "CHANGES_REQUESTED", "DISMISSED"]);
+
 function countCurrentApprovals(reviews) {
   const latestByReviewer = new Map();
 
@@ -57,7 +61,7 @@ function countCurrentApprovals(reviews) {
     const login = review && review.user && review.user.login ? review.user.login.toLowerCase() : null;
     const state = review && review.state ? review.state : null;
 
-    if (!login || !state) {
+    if (!login || !state || !APPROVAL_AFFECTING_STATES.has(state)) {
       continue;
     }
 
@@ -67,6 +71,22 @@ function countCurrentApprovals(reviews) {
   return Array.from(latestByReviewer.values()).filter((state) => state === "APPROVED").length;
 }
 
+function lowerCaseKeys(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key.toLowerCase(), entry]));
+}
+
+function stripHtmlComments(text) {
+  if (typeof text !== "string") {
+    return "";
+  }
+
+  return text.replace(/<!--[\s\S]*?-->/g, "");
+}
+
 module.exports = {
   asNumber,
   compileRegex,
@@ -74,5 +94,7 @@ module.exports = {
   getCommitSubject,
   interpolate,
   isEnabled,
+  lowerCaseKeys,
+  stripHtmlComments,
   toLowerStringArray,
 };

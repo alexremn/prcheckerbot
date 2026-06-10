@@ -38,49 +38,53 @@ async function collectPullRequestData(context, pr, config) {
   const perPage = asNumber(config && config.api && config.api.listPerPage, 100);
   const octokit = context.octokit;
 
-  const [commitsResult, filesResult, compareResult, reviewsResult] = await Promise.all([
+  // paginate() walks every page — rules must see ALL commits/files/reviews,
+  // otherwise e.g. sensitiveFiles silently misses files beyond the first page.
+  const [commits, files, compareResult, reviews] = await Promise.all([
     requiredData.has("commits")
-      ? octokit.rest.pulls.listCommits({
+      ? octokit.paginate(octokit.rest.pulls.listCommits, {
           owner,
           repo,
           pull_number: pr.number,
           per_page: perPage,
         })
-      : Promise.resolve({ data: [] }),
+      : Promise.resolve([]),
 
     requiredData.has("files")
-      ? octokit.rest.pulls.listFiles({
+      ? octokit.paginate(octokit.rest.pulls.listFiles, {
           owner,
           repo,
           pull_number: pr.number,
           per_page: perPage,
         })
-      : Promise.resolve({ data: [] }),
+      : Promise.resolve([]),
 
     requiredData.has("compare")
       ? octokit.rest.repos.compareCommits({
           owner,
           repo,
-          base: qualifyRef(pr.head, owner),
-          head: qualifyRef(pr.base, owner),
+          base: qualifyRef(pr.base, owner),
+          head: qualifyRef(pr.head, owner),
+          // behind_by is in the response metadata; we don't need the commit list.
+          per_page: 1,
         })
-      : Promise.resolve({ data: { ahead_by: 0 } }),
+      : Promise.resolve({ data: { behind_by: 0 } }),
 
     requiredData.has("reviews")
-      ? octokit.rest.pulls.listReviews({
+      ? octokit.paginate(octokit.rest.pulls.listReviews, {
           owner,
           repo,
           pull_number: pr.number,
           per_page: perPage,
         })
-      : Promise.resolve({ data: [] }),
+      : Promise.resolve([]),
   ]);
 
   return {
-    commits: commitsResult.data,
-    files: filesResult.data,
+    commits,
+    files,
     compare: compareResult.data,
-    reviews: reviewsResult.data,
+    reviews,
   };
 }
 

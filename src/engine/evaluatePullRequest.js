@@ -51,5 +51,6 @@ async function evaluatePullRequest(context, pr, config) {
 }
 
 module.exports = {
+  buildDerivedState,
   evaluatePullRequest,
 };

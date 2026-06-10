@@ -86,6 +86,7 @@ async function publishErrorCheckRun(context, pr, error, config) {
 }
 
 module.exports = {
+  buildSummary,
   getCheckRunName,
   publishCheckRun,
   publishErrorCheckRun,

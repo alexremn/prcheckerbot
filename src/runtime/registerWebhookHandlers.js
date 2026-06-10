@@ -40,8 +40,12 @@ function registerWebhookHandlers(app, config) {
       return;
     }
 
-    const pr = await loadPullRequest(context, pullRequests[0].number);
-    await runPrValidation(context, pr, config);
+    // A check run can be attached to several PRs (e.g. same head SHA) —
+    // revalidate every one of them, not just the first.
+    for (const pullRequestRef of pullRequests) {
+      const pr = await loadPullRequest(context, pullRequestRef.number);
+      await runPrValidation(context, pr, config);
+    }
   });
 }
 

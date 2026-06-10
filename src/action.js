@@ -1,5 +1,8 @@
 const fs = require("node:fs");
 const { Octokit } = require("@octokit/rest");
+const { retry } = require("@octokit/plugin-retry");
+
+const OctokitWithRetry = Octokit.plugin(retry);
 
 const { loadConfig } = require("./config");
 const { evaluatePullRequest } = require("./engine/evaluatePullRequest");
@@ -25,16 +28,21 @@ function parseBool(value, fallback) {
   return ["true", "1", "yes"].includes(String(value).toLowerCase());
 }
 
-function applyActionOverrides(config) {
-  const checkRunName = readEnv("INPUT_CHECK_RUN_NAME");
-  if (checkRunName) {
-    config.checkRun = { ...(config.checkRun || {}), name: checkRunName };
-  }
-
+// Must run before loadConfig() — it only sets the env var loadConfig reads.
+function applyConfigPathOverride() {
   const configPath = readEnv("INPUT_CONFIG_PATH");
   if (configPath) {
     process.env.PR_CHECKER_CONFIG_PATH = configPath;
   }
+}
+
+function withCheckRunNameOverride(config) {
+  const checkRunName = readEnv("INPUT_CHECK_RUN_NAME");
+  if (!checkRunName) {
+    return config;
+  }
+
+  return { ...config, checkRun: { ...(config.checkRun || {}), name: checkRunName } };
 }
 
 function writeOutputs(results) {
@@ -111,11 +119,10 @@ async function main() {
   }
 
   const payload = JSON.parse(fs.readFileSync(eventPath, "utf8"));
-  const octokit = new Octokit({ auth: token, userAgent: "github-prchecker-action" });
+  const octokit = new OctokitWithRetry({ auth: token, userAgent: "github-prchecker-action" });
 
-  applyActionOverrides({});
-  const config = loadConfig(log);
-  applyActionOverrides(config);
+  applyConfigPathOverride();
+  const config = withCheckRunNameOverride(loadConfig(log));
 
   const context = buildActionContext({ octokit, log, owner, repo, payload });
 
@@ -143,7 +150,17 @@ async function main() {
     process.exit(failOnFailure ? 1 : 0);
   }
 
-  await publishCheckRun(context, pr, results, config);
+  // Fork PRs ship a read-only GITHUB_TOKEN — checks.create returns 403.
+  // The verdict still has to reach outputs/step summary and the exit code.
+  try {
+    await publishCheckRun(context, pr, results, config);
+  } catch (error) {
+    log.error(
+      { err: error },
+      `Failed to publish check run for PR #${pr.number} (read-only token on fork PRs?); continuing with outputs and summary`
+    );
+  }
+
   writeOutputs(results);
   writeStepSummary(results);
 

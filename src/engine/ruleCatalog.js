@@ -4,6 +4,8 @@ const {
   countCurrentApprovals,
   getCommitSubject,
   interpolate,
+  lowerCaseKeys,
+  stripHtmlComments,
   toLowerStringArray,
 } = require("./helpers");
 
@@ -17,9 +19,57 @@ function withWarning(message) {
   return { failures: [], warnings: [message] };
 }
 
+function createBlockedLabelsRule(defaultFallbackMessage) {
+  return {
+    requiredData: [],
+    configKeys: ["enabled", "labels", "messages", "fallbackMessage"],
+    run({ check, derived }) {
+      const labels = toLowerStringArray(check.labels);
+      const messages = lowerCaseKeys(check.messages);
+      const fallback = check.fallbackMessage || defaultFallbackMessage;
+
+      const failures = labels
+        .filter((blockedLabel) => derived.labelSet.has(blockedLabel))
+        .map((blockedLabel) => messages[blockedLabel] || interpolate(fallback, { label: blockedLabel }));
+
+      return { failures, warnings: [] };
+    },
+  };
+}
+
+function createCommitPatternRule({ checkName, fallbackPattern, defaultMessage }) {
+  return {
+    requiredData: ["commits"],
+    configKeys: ["enabled", "pattern", "flags", "message"],
+    run({ check, data, context }) {
+      const regex = compileRegex({
+        checkName,
+        pattern: check.pattern,
+        flags: check.flags,
+        fallback: fallbackPattern,
+        logger: context.log,
+      });
+
+      const hasMatch =
+        Boolean(regex) &&
+        data.commits.some((commit) => {
+          const message = commit && commit.commit ? commit.commit.message : "";
+          return Boolean(message && regex.test(message));
+        });
+
+      if (hasMatch) {
+        return withFailure(check.message || defaultMessage);
+      }
+
+      return EMPTY_RESULT;
+    },
+  };
+}
+
 const RULE_CATALOG = {
   labelsRequired: {
     requiredData: [],
+    configKeys: ["enabled", "minCount", "message"],
     run({ check, derived }) {
       const minCount = asNumber(check.minCount, 1);
       if (derived.labels.length < minCount) {
@@ -29,23 +79,11 @@ const RULE_CATALOG = {
     },
   },
 
-  blockedLabels: {
-    requiredData: [],
-    run({ check, derived }) {
-      const labels = toLowerStringArray(check.labels);
-      const messages = check.messages || {};
-      const fallback = check.fallbackMessage || "❌ PR has blocked label: {label}";
-
-      const failures = labels
-        .filter((blockedLabel) => derived.labelSet.has(blockedLabel))
-        .map((blockedLabel) => messages[blockedLabel] || interpolate(fallback, { label: blockedLabel }));
-
-      return { failures, warnings: [] };
-    },
-  },
+  blockedLabels: createBlockedLabelsRule("❌ PR has blocked label: {label}"),
 
   titlePatternBlock: {
     requiredData: [],
+    configKeys: ["enabled", "pattern", "flags", "message"],
     run({ check, derived, context }) {
       const regex = compileRegex({
         checkName: "titlePatternBlock",
@@ -65,9 +103,12 @@ const RULE_CATALOG = {
 
   descriptionRequired: {
     requiredData: [],
+    configKeys: ["enabled", "minLength", "message"],
     run({ check, derived }) {
       const minLength = asNumber(check.minLength, 5);
-      if (derived.body.length < minLength) {
+      // PR-template boilerplate lives in HTML comments; whitespace is not a summary.
+      const meaningfulBody = stripHtmlComments(derived.body).trim();
+      if (meaningfulBody.length < minLength) {
         return withFailure(
           check.message || "❌ Please provide a meaningful summary in the Pull Request description"
         );
@@ -76,23 +117,11 @@ const RULE_CATALOG = {
     },
   },
 
-  blockedReviewLabels: {
-    requiredData: [],
-    run({ check, derived }) {
-      const labels = toLowerStringArray(check.labels);
-      const messages = check.messages || {};
-      const fallback = check.fallbackMessage || "❌ PR has blocking review label: {label}";
-
-      const failures = labels
-        .filter((blockedLabel) => derived.labelSet.has(blockedLabel))
-        .map((blockedLabel) => messages[blockedLabel] || interpolate(fallback, { label: blockedLabel }));
-
-      return { failures, warnings: [] };
-    },
-  },
+  blockedReviewLabels: createBlockedLabelsRule("❌ PR has blocking review label: {label}"),
 
   requiredLabels: {
     requiredData: [],
+    configKeys: ["enabled", "groups"],
     run({ check, derived }) {
       const groups = Array.isArray(check.groups) ? check.groups : [];
       const failures = [];
@@ -115,6 +144,7 @@ const RULE_CATALOG = {
 
   minApprovals: {
     requiredData: ["reviews"],
+    configKeys: ["enabled", "required", "message"],
     run({ check, data }) {
       const required = asNumber(check.required, 1);
       const current = countCurrentApprovals(data.reviews);
@@ -131,6 +161,7 @@ const RULE_CATALOG = {
 
   baseBranchAllowed: {
     requiredData: [],
+    configKeys: ["enabled", "allowed", "message"],
     run({ check, derived, pr }) {
       const allowed = toLowerStringArray(check.allowed);
       if (allowed.length === 0) {
@@ -155,6 +186,7 @@ const RULE_CATALOG = {
 
   bigPrWarning: {
     requiredData: [],
+    configKeys: ["enabled", "maxChanges", "message"],
     run({ check, derived, pr }) {
       const maxChanges = asNumber(check.maxChanges, 500);
       if (derived.totalChanges > maxChanges) {
@@ -175,82 +207,27 @@ const RULE_CATALOG = {
     },
   },
 
-  wipCommitMessages: {
-    requiredData: ["commits"],
-    run({ check, data, context }) {
-      const regex = compileRegex({
-        checkName: "wipCommitMessages",
-        pattern: check.pattern,
-        flags: check.flags,
-        fallback: /\b(wip|work.in.progress)\b/i,
-        logger: context.log,
-      });
+  wipCommitMessages: createCommitPatternRule({
+    checkName: "wipCommitMessages",
+    fallbackPattern: /\b(wip|work.in.progress)\b/i,
+    defaultMessage: "❌ PR is a Work in Progress (commit message contains 'WIP')",
+  }),
 
-      const hasWipCommit = data.commits.some((commit) => {
-        const message = commit && commit.commit ? commit.commit.message : "";
-        return Boolean(regex && message && regex.test(message));
-      });
+  mergeCommits: createCommitPatternRule({
+    checkName: "mergeCommits",
+    fallbackPattern: /^merge (branch|pull request)/i,
+    defaultMessage: "❌ Please rebase to remove merge commits in this PR",
+  }),
 
-      if (hasWipCommit) {
-        return withFailure(check.message || "❌ PR is a Work in Progress (commit message contains 'WIP')");
-      }
-
-      return EMPTY_RESULT;
-    },
-  },
-
-  mergeCommits: {
-    requiredData: ["commits"],
-    run({ check, data, context }) {
-      const regex = compileRegex({
-        checkName: "mergeCommits",
-        pattern: check.pattern,
-        flags: check.flags,
-        fallback: /^merge (branch|pull request)/i,
-        logger: context.log,
-      });
-
-      const hasMergeCommit = data.commits.some((commit) => {
-        const message = commit && commit.commit ? commit.commit.message : "";
-        return Boolean(regex && message && regex.test(message));
-      });
-
-      if (hasMergeCommit) {
-        return withFailure(check.message || "❌ Please rebase to remove merge commits in this PR");
-      }
-
-      return EMPTY_RESULT;
-    },
-  },
-
-  fixupCommits: {
-    requiredData: ["commits"],
-    run({ check, data, context }) {
-      const regex = compileRegex({
-        checkName: "fixupCommits",
-        pattern: check.pattern,
-        flags: check.flags,
-        fallback: /^(fixup|squash)!/i,
-        logger: context.log,
-      });
-
-      const hasFixupCommit = data.commits.some((commit) => {
-        const message = commit && commit.commit ? commit.commit.message : "";
-        return Boolean(regex && message && regex.test(message));
-      });
-
-      if (hasFixupCommit) {
-        return withFailure(
-          check.message || "❌ Contains fixup or squash commits - please squash them before merging"
-        );
-      }
-
-      return EMPTY_RESULT;
-    },
-  },
+  fixupCommits: createCommitPatternRule({
+    checkName: "fixupCommits",
+    fallbackPattern: /^(fixup|squash)!/i,
+    defaultMessage: "❌ Contains fixup or squash commits - please squash them before merging",
+  }),
 
   meaningfulCommitMessages: {
     requiredData: ["commits"],
+    configKeys: ["enabled", "minSubjectLength", "disallowedExactSubjects", "disallowedPrefixes", "message"],
     run({ check, data }) {
       const minSubjectLength = asNumber(check.minSubjectLength, 11);
       const disallowedExact = toLowerStringArray(check.disallowedExactSubjects);
@@ -289,9 +266,11 @@ const RULE_CATALOG = {
 
   branchUpToDate: {
     requiredData: ["compare"],
+    configKeys: ["enabled", "maxCommitsBehind", "message"],
     run({ check, data, pr }) {
       const maxBehind = asNumber(check.maxCommitsBehind, 5);
-      const commitsBehind = data.compare && data.compare.ahead_by ? data.compare.ahead_by : 0;
+      const commitsBehind =
+        data.compare && Number.isFinite(data.compare.behind_by) ? data.compare.behind_by : 0;
 
       if (commitsBehind > maxBehind) {
         const template =
@@ -313,11 +292,27 @@ const RULE_CATALOG = {
 
   sensitiveFiles: {
     requiredData: ["files"],
-    run({ check, data }) {
+    configKeys: ["enabled", "blockedExtensions", "blockedPatterns", "message"],
+    run({ check, data, context }) {
       const blockedExtensions = toLowerStringArray(check.blockedExtensions);
+      const blockedPatterns = (Array.isArray(check.blockedPatterns) ? check.blockedPatterns : [])
+        .map((pattern) =>
+          compileRegex({
+            checkName: "sensitiveFiles",
+            pattern,
+            flags: "i",
+            fallback: null,
+            logger: context.log,
+          })
+        )
+        .filter(Boolean);
+
       const blockedFile = data.files.find((file) => {
         const filename = String(file.filename || "").toLowerCase();
-        return blockedExtensions.some((ext) => filename.endsWith(ext));
+        return (
+          blockedExtensions.some((ext) => filename.endsWith(ext)) ||
+          blockedPatterns.some((regex) => regex.test(filename))
+        );
       });
 
       if (blockedFile) {
@@ -331,6 +326,7 @@ const RULE_CATALOG = {
 
   sensitiveInfoInBody: {
     requiredData: [],
+    configKeys: ["enabled", "pattern", "flags", "message"],
     run({ check, derived, context }) {
       const regex = compileRegex({
         checkName: "sensitiveInfoInBody",
@@ -341,7 +337,7 @@ const RULE_CATALOG = {
         logger: context.log,
       });
 
-      if (regex && regex.test(derived.body)) {
+      if (regex && regex.test(`${derived.title}\n${derived.body}`)) {
         return withFailure(
           check.message || "❌ PR description may contain sensitive information (passwords, secrets, tokens)"
         );

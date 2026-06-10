@@ -1,8 +1,16 @@
 const fs = require("node:fs");
 const path = require("node:path");
 
+const { RULE_CATALOG } = require("./engine/ruleCatalog");
+
 const CONFIG_ENV_VAR = "PR_CHECKER_CONFIG_PATH";
 const DEFAULT_CONFIG_PATH = path.resolve(__dirname, "../config/default.json");
+
+// Keys that would let a malicious/typoed config reach into Object.prototype.
+const UNSAFE_MERGE_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+
+// Top-level config keys that are not checks but are still valid.
+const KNOWN_ROOT_KEYS = new Set(["checkRun", "api", "checks"]);
 
 function isPlainObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -20,6 +28,10 @@ function deepMerge(base, override) {
   const merged = { ...base };
 
   for (const [key, overrideValue] of Object.entries(override)) {
+    if (UNSAFE_MERGE_KEYS.has(key)) {
+      continue;
+    }
+
     const baseValue = base[key];
 
     if (isPlainObject(baseValue) && isPlainObject(overrideValue)) {
@@ -65,12 +77,53 @@ function logInfo(log, message) {
   console.info(message);
 }
 
+function logWarn(log, message) {
+  if (log && typeof log.warn === "function") {
+    log.warn(message);
+    return;
+  }
+  console.warn(message);
+}
+
+// Config typos are otherwise silent: an unknown check name or option key is
+// simply never read, and the rule quietly runs with defaults.
+function validateChecksConfig(config, log) {
+  for (const key of Object.keys(config)) {
+    if (!KNOWN_ROOT_KEYS.has(key)) {
+      logWarn(log, `Unknown config key "${key}" — ignored (typo?)`);
+    }
+  }
+
+  const checks = isPlainObject(config.checks) ? config.checks : {};
+
+  for (const [checkName, checkConfig] of Object.entries(checks)) {
+    const rule = RULE_CATALOG[checkName];
+    if (!rule) {
+      logWarn(log, `Unknown check "checks.${checkName}" — ignored (typo?)`);
+      continue;
+    }
+
+    if (!isPlainObject(checkConfig)) {
+      logWarn(log, `"checks.${checkName}" must be an object — ignored`);
+      continue;
+    }
+
+    const knownKeys = new Set(rule.configKeys || []);
+    for (const optionKey of Object.keys(checkConfig)) {
+      if (!knownKeys.has(optionKey)) {
+        logWarn(log, `Unknown option "checks.${checkName}.${optionKey}" — ignored (typo?)`);
+      }
+    }
+  }
+}
+
 function loadConfig(log) {
   const defaultConfig = parseJsonFile(DEFAULT_CONFIG_PATH, "default");
   const customPath = process.env[CONFIG_ENV_VAR];
 
   if (!customPath) {
     logInfo(log, `Using default config: ${DEFAULT_CONFIG_PATH}`);
+    validateChecksConfig(defaultConfig, log);
     return defaultConfig;
   }
 
@@ -78,11 +131,15 @@ function loadConfig(log) {
   const customConfig = parseJsonFile(resolvedCustomPath, "custom");
 
   logInfo(log, `Using custom config: ${resolvedCustomPath}`);
-  return deepMerge(defaultConfig, customConfig);
+  const merged = deepMerge(defaultConfig, customConfig);
+  validateChecksConfig(merged, log);
+  return merged;
 }
 
 module.exports = {
   CONFIG_ENV_VAR,
   DEFAULT_CONFIG_PATH,
+  deepMerge,
   loadConfig,
+  validateChecksConfig,
 };
