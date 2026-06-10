@@ -1,0 +1,6 @@
+dependencies:
+- name: common
+  repository: oci://ghcr.io/alexremn/charts
+  version: 2.3.0
+digest: sha256:789dbdbcb959b96e7b4f894fd43a2256ef3a181bbd9c9434f37434c2df899eeb
+generated: "2026-06-10T11:56:15.486658+02:00"

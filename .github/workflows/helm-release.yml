@@ -1,0 +1,91 @@
+name: helm-from-release
+
+on:
+  release:
+    types: [published, released, prereleased]
+  workflow_run:
+    workflows:
+      - Release
+    types:
+      - completed
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  release-chart:
+    if: |
+      github.event_name == 'release' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (release event)
+        if: github.event_name == 'release'
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Checkout (workflow run event)
+        if: github.event_name == 'workflow_run'
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Resolve release tag
+        id: tag
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          if [ "$EVENT_NAME" = "release" ]; then
+            tag="$RELEASE_TAG"
+          else
+            tag="$(git tag --points-at HEAD | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+' | sort -V | tail -n1)"
+          fi
+          if [ -z "$tag" ]; then
+            echo "No release tag resolved; skipping."
+            echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          version="${tag#v}"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
+      - name: Install Helm
+        if: steps.tag.outputs.skip != 'true'
+        uses: azure/setup-helm@v5
+        with:
+          version: v4.2.0
+
+      - name: Log in to ghcr.io
+        if: steps.tag.outputs.skip != 'true'
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
+        run: echo "$GHCR_TOKEN" | helm registry login ghcr.io -u "$GHCR_USER" --password-stdin
+
+      - name: Update chart version and appVersion
+        if: steps.tag.outputs.skip != 'true'
+        env:
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: |
+          sed -i "s/^version:.*/version: ${VERSION}/" .helm/prcheckerbot/Chart.yaml
+          sed -i "s/^appVersion:.*/appVersion: \"${VERSION}\"/" .helm/prcheckerbot/Chart.yaml
+
+      - name: Build Helm dependencies
+        if: steps.tag.outputs.skip != 'true'
+        run: helm dependency build .helm/prcheckerbot
+
+      - name: Package chart
+        if: steps.tag.outputs.skip != 'true'
+        run: helm package .helm/prcheckerbot -d dist/
+
+      - name: Push chart to ghcr.io
+        if: steps.tag.outputs.skip != 'true'
+        env:
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: helm push "dist/prcheckerbot-${VERSION}.tgz" oci://ghcr.io/alexremn/prcheckerbot-chart

@@ -1,0 +1,13 @@
+{{- $cmp := "prcheckerbot" -}}
+{{ include "chart.configmap" (dict "Values" .Values "Release" .Release "Chart" .Chart "cmp" $cmp) }}
+{{ include "chart.extsecret" (dict "Values" .Values "Release" .Release "Chart" .Chart "cmp" $cmp) }}
+{{ include "chart.secret" (dict "Values" .Values "Release" .Release "Chart" .Chart "cmp" $cmp) }}
+{{ include "chart.serviceAccount" (dict "Values" .Values "Release" .Release "Chart" .Chart "cmp" $cmp) }}
+{{ include "chart.deployment" (dict "Values" .Values "Release" .Release "Chart" .Chart "cmp" $cmp) }}
+{{ include "chart.service" (dict "Values" .Values "Release" .Release "Chart" .Chart "cmp" $cmp) }}
+{{ include "chart.ingress" (dict "Values" .Values "Release" .Release "Chart" .Chart "cmp" $cmp) }}
+{{ include "chart.hpa" (dict "Values" .Values "Release" .Release "Chart" .Chart "cmp" $cmp) }}
+{{ include "chart.pdb" (dict "Values" .Values "Release" .Release "Chart" .Chart "cmp" $cmp) }}
+{{ include "chart.podmonitor" (dict "Values" .Values "Release" .Release "Chart" .Chart "cmp" $cmp) }}
+{{ include "chart.servicemonitor" (dict "Values" .Values "Release" .Release "Chart" .Chart "cmp" $cmp) }}
+{{ include "chart.networkpolicy" (dict "Values" .Values "Release" .Release "Chart" .Chart "cmp" $cmp) }}

@@ -1,0 +1,12 @@
+apiVersion: v2
+name: prcheckerbot
+description: GitHub PR validation bot (Probot app / GitHub Action)
+type: application
+version: 0.1.0
+appVersion: "1.0.4"
+maintainers:
+  - name: alexremn
+dependencies:
+  - name: common
+    version: "^2.3.0"
+    repository: "oci://ghcr.io/alexremn/charts"

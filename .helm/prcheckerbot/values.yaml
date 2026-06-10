@@ -1,0 +1,92 @@
+# Prcheckerbot Helm values. Thin wrapper over the `common` library chart
+# (oci://ghcr.io/alexremn/charts). Replace every `PLACEHOLDER:` per environment.
+
+name: prcheckerbot
+
+global:
+  profile: generic
+  security: generic
+  image:
+    repository: docker.io/alexremn/prcheckerbot   # Docker Hub (release images are published here)
+    # tag: omitted on purpose — the common chart falls back to Chart.appVersion,
+    # which the helm-release workflow pins to the release version.
+    pullPolicy: IfNotPresent
+
+prcheckerbot:
+  replicas: 1
+
+  serviceAccount:
+    name: prcheckerbot
+
+  ports:
+    http: 3000
+
+  service:
+    type: ClusterIP
+
+  # PLACEHOLDER: ingress shape for your cluster. Drop the key to disable.
+  # ingress:
+  #   external:
+  #     className: nginx
+  #     domains:
+  #       - prchecker.example.com           # PLACEHOLDER
+  #     annotations:
+  #       cert-manager.io/cluster-issuer: letsencrypt   # PLACEHOLDER
+
+  resources:
+    requests:
+      cpu: 300m
+      memory: 256Mi
+    limits:
+      cpu: 300m
+      memory: 512Mi
+
+  envFrom:
+    secrets:
+      - name: prcheckerbot
+
+  probes:
+    type: http
+    path: /healthz
+    port: http
+    initialDelaySeconds: 1
+    periodSeconds: 15
+    failureThreshold: 10
+
+  securityContext:
+    pod:
+      runAsNonRoot: true
+      runAsUser: 1000
+      runAsGroup: 1000
+      fsGroup: 1000
+    container:
+      capabilities:
+        drop: [ALL]
+      readOnlyRootFilesystem: true
+      runAsNonRoot: true
+      runAsUser: 1000
+
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# ── Secrets ──────────────────────────────────────────────────────
+# REQUIRED: define `secrets` (ExternalSecret) or `nativeSecrets` (plain Secret),
+# or reference an out-of-band Secret via `prcheckerbot.envFrom.secrets[].name`.
+# Without secrets the Probot app cannot authenticate to GitHub.
+#
+# secrets:
+#   prcheckerbot:
+#     secretStore: secrets-manager          # PLACEHOLDER
+#     secretKey: "PLACEHOLDER/prchecker"    # PLACEHOLDER
+#     properties:
+#       WEBHOOK_SECRET: "WEBHOOK_SECRET"
+#       APP_ID: "APP_ID"
+#       PRIVATE_KEY: "PRIVATE_KEY"
+#
+# nativeSecrets:
+#   prcheckerbot:
+#     stringData:
+#       WEBHOOK_SECRET: "PLACEHOLDER"
+#       APP_ID: "PLACEHOLDER"
+#       PRIVATE_KEY: "PLACEHOLDER"
