@@ -1,6 +1,6 @@
 {
   "name": "prcheckerbot",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "GitHub App for PR validation checks",
   "author": "Alex Remniov <alexander@remniov.com>",
   "license": "MIT",

@@ -1,0 +1,63 @@
+# git-cliff configuration — generates categorized release notes from
+# conventional commits. Used by .github/workflows/release.yml to populate
+# the GitHub Release body. See https://git-cliff.org/docs/configuration
+
+[changelog]
+# Stripped from the release body via `--strip header` in CI; kept for
+# local full-changelog generation (`git-cliff -o CHANGELOG.md`).
+header = """
+# Changelog
+
+All notable changes to this project are documented in this file.
+"""
+
+# Tera template rendered once per release. Trailing `\` suppresses the
+# following newline (git-cliff convention); leading indentation is stripped.
+body = """
+{% if version %}\
+    ## [{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }}
+{% else %}\
+    ## [Unreleased]
+{% endif %}\
+{% for group, commits in commits | group_by(attribute="group") %}
+    ### {{ group | striptags | trim | upper_first }}
+    {% for commit in commits %}
+        - {% if commit.scope %}**{{ commit.scope }}:** {% endif %}\
+            {% if commit.breaking %}[**breaking**] {% endif %}\
+            {{ commit.message | upper_first }}\
+    {% endfor %}
+{% endfor %}\
+{% if previous and previous.version %}
+**Full Changelog**: https://github.com/alexremn/prcheckerbot/compare/{{ previous.version }}...{{ version }}
+{% endif %}\
+"""
+
+footer = ""
+trim = true
+
+[git]
+conventional_commits = true
+# Drop commits that don't follow conventional format from the changelog.
+filter_unconventional = true
+split_commits = false
+# Map commit type -> section. The `<!-- N -->` prefix orders the sections
+# and is stripped from the rendered heading via `striptags`.
+commit_parsers = [
+  { message = "^feat", group = "<!-- 0 -->Features" },
+  { message = "^fix", group = "<!-- 1 -->Bug Fixes" },
+  { message = "^perf", group = "<!-- 2 -->Performance" },
+  { message = "^refactor", group = "<!-- 3 -->Refactor" },
+  { message = "^docs", group = "<!-- 4 -->Documentation" },
+  { message = "^test", group = "<!-- 5 -->Tests" },
+  { message = "^ci", group = "<!-- 6 -->CI/CD" },
+  { message = "^chore\\(release\\):", skip = true },
+  { message = "^chore\\(deps\\)", group = "<!-- 7 -->Dependencies" },
+  { message = "^chore", group = "<!-- 8 -->Miscellaneous" },
+  { message = ".*", group = "<!-- 9 -->Other" },
+]
+protect_breaking_commits = false
+filter_commits = false
+# Only consider semver release tags; ignore the moving major tag (v1).
+tag_pattern = "v[0-9]+\\.[0-9]+\\.[0-9]+"
+topo_order = false
+sort_commits = "oldest"
