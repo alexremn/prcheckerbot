@@ -22,14 +22,14 @@ jobs:
     steps:
       - name: Checkout (release event)
         if: github.event_name == 'release'
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           ref: ${{ github.event.release.tag_name }}
 
       - name: Checkout (workflow run event)
         if: github.event_name == 'workflow_run'
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           ref: ${{ github.event.workflow_run.head_sha }}
