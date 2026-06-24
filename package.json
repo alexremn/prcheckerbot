@@ -1,6 +1,6 @@
 {
   "name": "prcheckerbot",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "GitHub App for PR validation checks",
   "author": "Alex Remniov <alexander@remniov.com>",
   "license": "MIT",
@@ -29,6 +29,9 @@
     "jest": "^30.4.2",
     "nodemon": "^3.1.0",
     "smee-client": "^5.0.0"
+  },
+  "overrides": {
+    "js-yaml": "^4.2.0"
   },
   "engines": {
     "node": ">=24"
