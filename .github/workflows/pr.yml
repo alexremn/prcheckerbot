@@ -11,8 +11,14 @@ permissions:
 
 jobs:
   test:
-    name: Lint and test
+    name: Lint and test (Node ${{ matrix.node-version }})
     runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # "24" is the `engines` floor; "26" is the runtime the published image ships.
+        node-version: ["24", "26"]
 
     steps:
       - name: Checkout repository
@@ -21,7 +27,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: "24"
+          node-version: ${{ matrix.node-version }}
           cache: npm
 
       - name: Install dependencies
@@ -35,3 +41,20 @@ jobs:
 
       - name: Run tests
         run: npm test
+
+  # The branch ruleset requires a status check named exactly "Lint and test".
+  # Matrix legs report as "Lint and test (Node 24|26)", so this job keeps that
+  # required context stable — do not rename it without updating the ruleset.
+  gate:
+    name: Lint and test
+    runs-on: ubuntu-latest
+    needs: test
+    if: always()
+
+    steps:
+      - name: Verify matrix result
+        env:
+          RESULT: ${{ needs.test.result }}
+        run: |
+          echo "Node matrix result: $RESULT"
+          [ "$RESULT" = "success" ] || exit 1
