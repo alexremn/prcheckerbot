@@ -20,7 +20,7 @@
     "test": "jest --passWithNoTests"
   },
   "dependencies": {
-    "@octokit/plugin-retry": "^8.1.0",
+    "@octokit/plugin-retry": "^8.1.1",
     "@octokit/rest": "^22.0.1",
     "pino": "^10.3.1",
     "probot": "^14.2.4"
