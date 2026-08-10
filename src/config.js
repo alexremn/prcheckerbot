@@ -108,7 +108,7 @@ function validateChecksConfig(config, log) {
       continue;
     }
 
-    const knownKeys = new Set(rule.configKeys || []);
+    const knownKeys = new Set(rule.configKeys);
     for (const optionKey of Object.keys(checkConfig)) {
       if (!knownKeys.has(optionKey)) {
         logWarn(log, `Unknown option "checks.${checkName}.${optionKey}" — ignored (typo?)`);
