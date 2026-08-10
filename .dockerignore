@@ -8,3 +8,10 @@ README.md
 docker-compose.yml
 .DS_Store
 .github
+test
+jest.config.js
+coverage
+# Gitignored locally, so CI never sees them — but a local `docker build` would
+# otherwise bake a developer's private notes into the image.
+CLAUDE.md
+graphify-out
