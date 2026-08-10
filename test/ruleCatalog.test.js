@@ -245,6 +245,117 @@ describe("sensitiveFiles", () => {
   });
 });
 
+describe("requiredLabels group shapes", () => {
+  test.each([
+    ["an empty anyOf array", []],
+    ["a missing anyOf", undefined],
+    ["a non-array anyOf", "qa passed"],
+  ])("skips a group with %s even when nothing matches", (_label, anyOf) => {
+    const check = { groups: [{ anyOf, message: "should never surface" }] };
+
+    expect(runRule("requiredLabels", { check }).failures).toEqual([]);
+  });
+
+  test("skippable groups do not suppress failures from valid groups", () => {
+    const check = {
+      groups: [{ anyOf: [] }, { anyOf: ["qa passed"], message: "needs QA" }],
+    };
+
+    expect(runRule("requiredLabels", { check }).failures).toEqual(["needs QA"]);
+  });
+
+  test("treats non-array groups as no groups", () => {
+    expect(runRule("requiredLabels", { check: { groups: "qa passed" } }).failures).toEqual([]);
+  });
+});
+
+describe("meaningfulCommitMessages subject edge cases", () => {
+  const check = {
+    minSubjectLength: 11,
+    disallowedExactSubjects: ["fix", "update"],
+    disallowedPrefixes: ["temp"],
+  };
+
+  test.each([
+    ["an empty message", { commit: { message: "" } }],
+    ["a newline-only message", { commit: { message: "\n\n" } }],
+    ["a whitespace-only message", { commit: { message: "   \t  " } }],
+    ["a commit without a commit object", { sha: "abc123" }],
+    ["a null commit entry", null],
+  ])("does not flag %s", (_label, commit) => {
+    const data = { commits: [commit] };
+
+    expect(runRule("meaningfulCommitMessages", { check, data }).failures).toHaveLength(0);
+  });
+});
+
+describe("meaningfulCommitMessages long subjects", () => {
+  const check = {
+    minSubjectLength: 3,
+    disallowedExactSubjects: ["Update Dependencies"],
+    disallowedPrefixes: ["temp"],
+  };
+
+  test("flags a long-enough subject that exactly matches a disallowed subject case-insensitively", () => {
+    const data = { commits: [{ commit: { message: "UPDATE DEPENDENCIES\n\ndetails here" } }] };
+
+    expect(runRule("meaningfulCommitMessages", { check, data }).failures).toHaveLength(1);
+  });
+
+  test("flags a long-enough subject that starts with a disallowed prefix case-insensitively", () => {
+    const data = { commits: [{ commit: { message: "TEMP: debugging the flaky test" } }] };
+
+    expect(runRule("meaningfulCommitMessages", { check, data }).failures).toHaveLength(1);
+  });
+
+  test("passes a long-enough subject matching neither exact subjects nor prefixes", () => {
+    const data = { commits: [{ commit: { message: "refactor: extract the rule catalog" } }] };
+
+    expect(runRule("meaningfulCommitMessages", { check, data }).failures).toHaveLength(0);
+  });
+});
+
+describe("commit pattern rules with malformed commit entries", () => {
+  const patternRules = ["wipCommitMessages", "mergeCommits", "fixupCommits"];
+
+  test.each(patternRules)("%s treats a commit without a .commit object as empty", (name) => {
+    const data = { commits: [{ sha: "abc" }, null, undefined] };
+
+    expect(runRule(name, { data }).failures).toEqual([]);
+  });
+
+  test.each(patternRules)("%s still flags a real match alongside malformed entries", (name) => {
+    const message = { wipCommitMessages: "WIP: later", mergeCommits: "Merge branch 'x'", fixupCommits: "fixup! earlier" }[name];
+    const data = { commits: [null, { sha: "abc" }, { commit: { message } }] };
+
+    expect(runRule(name, { data }).failures).toHaveLength(1);
+  });
+});
+
+describe("requiredLabels default message", () => {
+  test("falls back to listing the required labels when the group has no message", () => {
+    const check = { groups: [{ anyOf: ["Bug", "Feature"] }] };
+
+    const result = runRule("requiredLabels", { check, pr: makePr({ labels: [] }) });
+
+    expect(result.failures).toEqual(["❌ Missing one of required labels: bug, feature"]);
+  });
+});
+
+describe("bigPrWarning missing change counts", () => {
+  test("renders 0 for additions and deletions the payload omits", () => {
+    // derived.totalChanges is computed from the same missing fields, so drive
+    // the warning with maxChanges: -1 to reach the interpolation branch.
+    const pr = makePr({ additions: undefined, deletions: undefined });
+
+    const result = runRule("bigPrWarning", { check: { maxChanges: -1 }, pr });
+
+    expect(result.warnings).toEqual([
+      "⚠️ Big PR: 0 additions + 0 deletions = 0 total changes",
+    ]);
+  });
+});
+
 describe("sensitiveInfoInBody", () => {
   test("fails on secret in body", () => {
     const pr = makePr({ body: "password: hunter2hunter2" });

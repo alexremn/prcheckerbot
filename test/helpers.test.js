@@ -147,3 +147,71 @@ describe("stripHtmlComments", () => {
     expect(stripHtmlComments(null)).toBe("");
   });
 });
+
+describe("compileRegex without a fallback", () => {
+  test("returns null when no pattern and no fallback given", () => {
+    expect(compileRegex({ checkName: "t" })).toBeNull();
+    expect(compileRegex({ checkName: "t", fallback: null })).toBeNull();
+  });
+
+  test.each([
+    ["empty string", ""],
+    ["undefined", undefined],
+    ["null", null],
+  ])("treats a %s pattern as absent", (_label, pattern) => {
+    const fallback = /x/;
+    expect(compileRegex({ checkName: "t", pattern, fallback })).toBe(fallback);
+  });
+
+  test("returns null when an invalid pattern has no fallback", () => {
+    const logger = { warn: jest.fn() };
+
+    const regex = compileRegex({ checkName: "sensitiveFiles", pattern: "[", logger });
+
+    expect(regex).toBeNull();
+    expect(logger.warn).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("compileRegex invalid-pattern logging", () => {
+  test("names the offending check in the warning message", () => {
+    const logger = { warn: jest.fn() };
+
+    compileRegex({ checkName: "titlePatternBlock", pattern: "[", fallback: /x/, logger });
+
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining("Invalid regex in checks.titlePatternBlock")
+    );
+  });
+
+  test("does not throw when logger is undefined", () => {
+    const fallback = /x/;
+
+    expect(() => compileRegex({ checkName: "t", pattern: "[", fallback })).not.toThrow();
+    expect(compileRegex({ checkName: "t", pattern: "[", fallback })).toBe(fallback);
+  });
+
+  test("does not throw when logger has no warn function", () => {
+    const fallback = /x/;
+    const logger = { info: jest.fn() };
+
+    const regex = compileRegex({ checkName: "t", pattern: "[", fallback, logger });
+
+    expect(regex).toBe(fallback);
+    expect(logger.info).not.toHaveBeenCalled();
+  });
+});
+
+describe("compileRegex flags handling", () => {
+  test.each([
+    ["a number", 5],
+    ["undefined", undefined],
+    ["an object", {}],
+  ])("treats %s flags as no flags", (_label, flags) => {
+    const regex = compileRegex({ checkName: "t", pattern: "^abc", flags });
+
+    expect(regex.flags).toBe("");
+    expect(regex.test("abcdef")).toBe(true);
+    expect(regex.test("ABCdef")).toBe(false);
+  });
+});

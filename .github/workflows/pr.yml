@@ -39,8 +39,10 @@ jobs:
       - name: Validate default config JSON
         run: node -e "JSON.parse(require('fs').readFileSync('config/default.json','utf8'))"
 
-      - name: Run tests
-        run: npm test
+      # test:coverage, not test — `npm test` skips coverage, so the thresholds
+      # in jest.config.js would never actually gate anything in CI.
+      - name: Run tests with coverage
+        run: npm run test:coverage
 
   # The branch ruleset requires a status check named exactly "Lint and test".
   # Matrix legs report as "Lint and test (Node 24|26)", so this job keeps that

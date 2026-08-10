@@ -17,7 +17,8 @@
     "start": "node ./src/server.js",
     "start:probot": "probot run ./src/app.js",
     "dev": "nodemon --exec 'node ./src/server.js'",
-    "test": "jest --passWithNoTests"
+    "test": "jest --passWithNoTests",
+    "test:coverage": "jest --coverage"
   },
   "dependencies": {
     "@octokit/plugin-retry": "^8.1.1",
